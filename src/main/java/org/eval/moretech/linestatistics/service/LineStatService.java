@@ -18,19 +18,16 @@ import java.util.List;
 @Service
 @RequiredArgsConstructor
 public class LineStatService {
+
+    private static final int PREDICTION_INTERVAL_IN_MINUTES = 15;
+
+    private static final int MAX_LINE_TIME_IN_SECONDS = 60 * 40;
+
     private final LineStatRepository lineStatRepository;
 
     @Transactional
     public void save(List<LineStat> stats) {
         lineStatRepository.saveAll(stats);
-//        lineStatRepository.flush();
-    }
-
-    @Transactional
-    public LineStat save(LineStat stat) {
-        LineStat stat1 = lineStatRepository.save(stat);
-        lineStatRepository.flush();
-        return stat1;
     }
 
     @Transactional
@@ -38,13 +35,42 @@ public class LineStatService {
 
         log.info("date to search {}", LocalDateTime.now().minus(1, ChronoUnit.HOURS));
 
-        List<AverageLineStat> result = lineStatRepository.findAverageLineTimeForLastHour(
+        AverageLineStat result = lineStatRepository.findAverageLineTimeForLastHour(
             placeId, personType, LocalDateTime.now().minus(1, ChronoUnit.HOURS)
         );
+
+        if (result == null || result.getLine() == null) {
+            return LineTimeResponse.builder()
+                .lineTime(MAX_LINE_TIME_IN_SECONDS)
+                .build();
+        }
+
         return LineTimeResponse.builder()
-            .lineTime(
-                result.get(0).getLine().intValue()
-            )
+            .lineTime((int) Math.round(result.getLine()))
+            .build();
+    }
+
+    @Transactional
+    public LineTimeResponse findAverageLineTimeForPredicted(Long placeId, PersonType personType, LocalDateTime dateTime) {
+
+        log.info("date to search {}", LocalDateTime.now().minus(1, ChronoUnit.HOURS));
+
+        int minuteStart = dateTime.getMinute() / PREDICTION_INTERVAL_IN_MINUTES;
+        int minuteEnd = minuteStart + PREDICTION_INTERVAL_IN_MINUTES;
+
+        AverageLineStat result = lineStatRepository.findAverageLineTimeForPredicted(
+            placeId, personType,
+            dateTime.getDayOfWeek().getValue(), dateTime.getHour(), minuteStart, minuteEnd
+        );
+
+        if (result == null || result.getLine() == null) {
+            return LineTimeResponse.builder()
+                .lineTime(MAX_LINE_TIME_IN_SECONDS)
+                .build();
+        }
+
+        return LineTimeResponse.builder()
+            .lineTime((int) Math.round(result.getLine()))
             .build();
     }
 }

@@ -1,7 +1,7 @@
 package org.eval.moretech.linestatistics.controller;
 
 import lombok.RequiredArgsConstructor;
-import org.eval.moretech.linestatistics.entity.FindNearestRequest;
+import org.eval.moretech.linestatistics.entity.GenerateStatisticRequest;
 import org.eval.moretech.linestatistics.service.LineStatGenerationService;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -15,13 +15,8 @@ public class GenerateStatisticController {
 
     private final LineStatGenerationService generationService;
 
-    @PostMapping("/init")
-    public void init() {
-        generationService.generate();
-    }
-
     @PostMapping("/filtered-init")
-    public void initFiltered(@RequestBody FindNearestRequest request) {
+    public void initFiltered(@RequestBody GenerateStatisticRequest request) {
         generationService.generate(request);
     }
 }

@@ -2,10 +2,7 @@ package org.eval.moretech.linestatistics.service;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.eval.moretech.linestatistics.entity.BranchScheduleDto;
-import org.eval.moretech.linestatistics.entity.FindNearestRequest;
-import org.eval.moretech.linestatistics.entity.LineStat;
-import org.eval.moretech.linestatistics.entity.PersonType;
+import org.eval.moretech.linestatistics.entity.*;
 import org.eval.moretech.linestatistics.feign.BranchFeignClient;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.scheduling.annotation.Scheduled;
@@ -20,56 +17,55 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Random;
-import java.util.concurrent.TimeUnit;
 
 @Slf4j
 @Service
 @RequiredArgsConstructor
 public class LineStatGenerationService {
 
+    private static final int MAX_LINE_TIME_IN_SECONDS = 60 * 40;
+    private static final int STAT_GENERATION_INTERVAL_IN_MINUTES = 10;
+
     private static final Random random = new Random();
 
     private final LineStatService lineStatService;
     private final BranchFeignClient branchFeignClient;
 
-//    private List<BranchScheduleDto> branches;
-
     @Async
     @Transactional
-    public void generate() {
+    public void generate(GenerateStatisticRequest request) {
 
-        List<BranchScheduleDto> branches = branchFeignClient.getAllBranches();
+        FindNearestRequest branchesRequest = FindNearestRequest.builder()
+            .from(request.getFrom())
+            .personType(request.getPersonType())
+            .radius(request.getRadius())
+            .limit(request.getLimit())
+            .build();
 
-        LocalDate date = LocalDate.now().minusDays(15);
+        List<BranchScheduleDto> branches;
+        if (request.getFrom() != null) {
+            branches = branchFeignClient.getFilteredBranches(branchesRequest);
+        } else {
+            branches = branchFeignClient.getAllBranches();
+        }
+
+        LocalDate till = request.getTill();
+        if (till == null) {
+            till = LocalDate.now();
+        }
+
+        LocalDate date = till.minusDays(request.getDaysBefore());
 
         do {
-            generateForDay(branches, date);
+            List<LineStat> stats = generateForDay(branches, date);
+            lineStatService.save(stats);
+            log.info("Generation completed for {}. Saved {} items", date, stats.size());
             date = date.plusDays(1);
-        } while (date.isBefore(LocalDate.now()));
-
-        generateForLastMinutes(branches, true);
-
+        } while (date.isBefore(till));
     }
 
-    @Async
-    @Transactional
-    public void generate(FindNearestRequest request) {
-
-        List<BranchScheduleDto> branches = branchFeignClient.getFilteredBranches(request);
-
-        LocalDate date = LocalDate.now().minusDays(15);
-
-        do {
-            generateForDay(branches, date);
-            date = date.plusDays(1);
-        } while (date.isBefore(LocalDate.now()));
-
-        generateForLastMinutes(branches, true);
-
-    }
-
-    protected void generateForDay(List<BranchScheduleDto> branches, LocalDate date) {
-        log.info("Generation started for {}", date);
+    protected List<LineStat> generateForDay(List<BranchScheduleDto> branches, LocalDate date) {
+        List<LineStat> stats = new ArrayList<>();
 
         for (BranchScheduleDto branch : branches) {
 
@@ -82,7 +78,7 @@ public class LineStatGenerationService {
                         continue;
                     }
 
-                    generateForDayAndBranch(
+                    List<LineStat> patch = generateForDayAndBranch(
                         branch.getId(),
                         personTypeWeek.getKey(),
                         date,
@@ -90,69 +86,19 @@ public class LineStatGenerationService {
                         daySchedule.getTill()
                     );
 
-                }
-            }
-        }
-        log.info("Generation completed for {}", date);
-    }
-
-//    @Scheduled(fixedDelay = 10, timeUnit = TimeUnit.MINUTES)
-    public void scheduledGeneration() {
-
-        List<BranchScheduleDto> branches = branchFeignClient.getAllBranches();
-
-        if (CollectionUtils.isEmpty(branches)) {
-            return;
-        }
-        generateForLastMinutes(branches, false);
-    }
-
-    private void generateForLastMinutes(List<BranchScheduleDto> branches, boolean fromStartOfADay) {
-        LocalDate today = LocalDate.now();
-        LocalTime till = LocalTime.now();
-        log.info("Generation started for today {} till {}", today, till);
-
-        for (BranchScheduleDto branch : branches) {
-
-            for (Map.Entry<PersonType, BranchScheduleDto.ScheduleWeek> personTypeWeek: branch.getSchedules().entrySet()) {
-
-                if (personTypeWeek.getValue().containsKey(today.getDayOfWeek())) {
-
-                    BranchScheduleDto.ScheduleDay daySchedule = personTypeWeek.getValue().get(today.getDayOfWeek());
-
-                    if (daySchedule == null) {
-                        continue;
-                    }
-
-                    LocalTime from;
-                    if (fromStartOfADay) {
-                        from = daySchedule.getFrom();
-                    } else {
-                        from = till.minusMinutes(10);
-                        if (from.isBefore(daySchedule.getFrom())) {
-                            continue;
-                        }
-                    }
-
-                    generateForDayAndBranch(
-                        branch.getId(),
-                        personTypeWeek.getKey(),
-                        today,
-                        from,
-                        till
-                    );
+                    stats.addAll(patch);
 
                 }
             }
         }
-
-        log.info("Generation completed for today {} till {}", today, till);
+        return stats;
     }
 
-    protected void generateForDayAndBranch(Long placeId, PersonType personType, LocalDate date, LocalTime from, LocalTime till) {
+    protected List<LineStat> generateForDayAndBranch(Long placeId, PersonType personType, LocalDate date, LocalTime from, LocalTime till) {
+        List<LineStat> stats = new ArrayList<>();
 
         if (from == null || till == null) {
-            return;
+            return List.of();
         }
 
         LocalTime time = from;
@@ -165,15 +111,15 @@ public class LineStatGenerationService {
                 .placeId(placeId)
                 .personType(personType)
                 .createdAt(dateTime)
-                .lineTime(random.nextInt(60 * 40))
+                .lineTime(random.nextInt(MAX_LINE_TIME_IN_SECONDS))
                 .build();
 
-            lineStatService.save(stat);
+            stats.add(stat);
 
-            time = time.plusMinutes(10);
+            time = time.plusMinutes(STAT_GENERATION_INTERVAL_IN_MINUTES);
         }
 
-        log.info("Saved stats for place {}, personType {}, date {}, day {}"/*, stats.size()*/, placeId, personType, date, date.getDayOfWeek());
+        return stats;
     }
 
 }
