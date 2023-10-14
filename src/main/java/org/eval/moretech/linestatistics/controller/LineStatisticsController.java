@@ -9,7 +9,9 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
+import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.util.Map;
 
 @RestController
 @RequestMapping("/api/v1/line")
@@ -30,5 +32,14 @@ public class LineStatisticsController {
         @PathVariable LocalDateTime dateTime
         ) {
         return lineStatService.findAverageLineTimeForPredicted(placeId, personType, dateTime);
+    }
+
+    @GetMapping("/{placeId}/{personType}/stat/{date}")
+    Map<String, Integer> getLineTimeStatForDate(
+        @PathVariable Long placeId,
+        @PathVariable PersonType personType,
+        @PathVariable LocalDate date
+        ) {
+        return lineStatService.findAverageLineTimeStatForDay(placeId, personType, date);
     }
 }
