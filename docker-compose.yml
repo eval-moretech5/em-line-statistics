@@ -1,0 +1,12 @@
+version: "3"
+services:
+
+  em-postgres:
+    container_name: em-postgres
+    image: postgis/postgis:16-3.4
+    environment:
+      POSTGRES_USER: emuser
+      POSTGRES_PASSWORD: empassword
+      POSTGRES_DB: em
+    ports:
+      - 5432:5432

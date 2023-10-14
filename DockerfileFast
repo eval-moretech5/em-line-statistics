@@ -1,0 +1,7 @@
+FROM bellsoft/liberica-openjdk-alpine-musl:17
+ENV PROJECT_DIR=/app
+RUN mkdir -p $PROJECT_DIR
+WORKDIR $PROJECT_DIR
+COPY ./target/linestat-1.0.jar $PROJECT_DIR/
+EXPOSE 8003
+CMD ["java", "-jar", "/app/linestat-1.0.jar"]

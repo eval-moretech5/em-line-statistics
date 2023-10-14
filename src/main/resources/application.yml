@@ -1,0 +1,26 @@
+server:
+  port: 8005
+
+spring:
+  datasource:
+    url: ${DB_URL:jdbc:postgresql://localhost:5432/em}
+    username: ${DB_USER:emuser}
+    password: ${DB_PASSWORD:empassword}
+    driver-class-name: org.postgresql.Driver
+  jpa:
+
+    database-platform: org.hibernate.dialect.PostgreSQLDialect
+
+    generate-ddl: false
+    hibernate:
+      ddl-auto: none
+
+    show-sql: false
+    properties:
+      hibernate:
+        format_sql: true
+  sql.init.mode: never
+
+places.api:
+  url: http://localhost:8003/api/v1
+#  url: http://em23-branches:8003/api/v1
