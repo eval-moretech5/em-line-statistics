@@ -22,5 +22,11 @@ spring:
   sql.init.mode: never
 
 places.api:
-  url: http://localhost:8003/api/v1
-#  url: http://em23-branches:8003/api/v1
+#  url: http://localhost:8003/api/v1
+  url: http://em23-branches:8003/api/v1
+
+
+
+
+springdoc:
+  api-docs.path: /lines/api-docs
